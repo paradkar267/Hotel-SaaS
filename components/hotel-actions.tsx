@@ -160,6 +160,7 @@ function GstBillingSection({
   defaultGstBps = 1200,
   nightlyRate = 0,
   roomCount = 1,
+  disabled = false,
 }: {
   propertyState?: string;
   defaultCompanyName?: string;
@@ -168,6 +169,7 @@ function GstBillingSection({
   defaultGstBps?: number;
   nightlyRate?: number;
   roomCount?: number;
+  disabled?: boolean;
 }) {
   const [companyName, setCompanyName] = useState(defaultCompanyName);
   const [gstin, setGstin] = useState(defaultGstin);
@@ -215,6 +217,7 @@ function GstBillingSection({
           value={companyName}
           onChange={(e) => setCompanyName(e.target.value)}
           placeholder="Optional for B2B company billing"
+          disabled={disabled}
         />
         <Field
           label="Company GSTIN (optional)"
@@ -224,6 +227,7 @@ function GstBillingSection({
           placeholder="Optional (e.g. 27ABCDE1234F1Z5)"
           maxLength={15}
           title="Format: 15-character alphanumeric GSTIN"
+          disabled={disabled}
         />
         <SelectField
           label="Place of supply"
@@ -231,6 +235,7 @@ function GstBillingSection({
           value={guestState}
           onChange={(e) => setGuestState(e.target.value)}
           options={INDIAN_STATES.map((st) => [st, st])}
+          disabled={disabled}
         />
         <SelectField
           label="GST rate"
@@ -244,6 +249,7 @@ function GstBillingSection({
             ["0", "0% GST"]
           ]}
           required
+          disabled={disabled}
         />
       </div>
 
@@ -509,6 +515,8 @@ function StayForm({ booking, data, onClose, onSwitch, onSuccess }: FormProps & {
   const [billingType, setBillingType] = useState(String(booking.billingType));
   const [busy, setBusy] = useState(false); const [error, setError] = useState("");
   const rooms = data.rooms.filter((room) => room.status === "AVAILABLE" || room.id === booking.roomId);
+  const hasInvoice = !!booking.invoiceId;
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError("");
     try {
@@ -536,7 +544,17 @@ function StayForm({ booking, data, onClose, onSwitch, onSuccess }: FormProps & {
 
   return (
     <Modal title={`Manage stay · Room ${String(booking.roomNumber)}`} subtitle={`${String(booking.guestName)} · ${String(booking.bookingNumber)}`} icon={<DoorOpen size={21} />} onClose={onClose} wide>
-      <div className="record-lock-banner"><LockKeyhole size={18} /><div><b>Confirmed record is locked</b><span>Only an admin override with a reason can change it.</span></div></div>
+      {hasInvoice ? (
+        <div className="record-lock-banner" style={{ background: "#fffbeb", border: "1px solid #fef3c7", color: "#b45309" }}>
+          <AlertTriangle size={18} />
+          <div>
+            <b>Stay details are locked</b>
+            <span>An active invoice has already been issued. Void the invoice to modify stay details.</span>
+          </div>
+        </div>
+      ) : (
+        <div className="record-lock-banner"><LockKeyhole size={18} /><div><b>Confirmed record is locked</b><span>Only an admin override with a reason can change it.</span></div></div>
+      )}
       <div className="modal-action-strip">
         {!booking.invoiceId ? <button className="secondary-button" onClick={() => onSwitch({ type: "invoice", booking })}><FileText size={16} /> Create invoice</button> : <span className="invoice-state"><FileText size={15} /> Invoice {pretty(String(booking.invoiceStatus))}</span>}
         <button className="primary-button compact" onClick={() => onSwitch({ type: "checkout", booking })}><DoorOpen size={16} /> Complete check-out</button>
@@ -544,10 +562,10 @@ function StayForm({ booking, data, onClose, onSwitch, onSuccess }: FormProps & {
       <form onSubmit={submit} className="action-form">
         <FormSection title="Stay details" description="Changing rooms releases the previous room to housekeeping.">
           <div className="form-grid two">
-            <SelectField label="Assigned room" name="roomId" defaultValue={String(booking.roomId)} options={rooms.map((room) => [String(room.id), `${String(room.roomNumber)} · ${String(room.roomType)}`])} />
-            <Field label="Expected check-out" name="expectedCheckOutAt" type="datetime-local" defaultValue={toLocalInput(String(booking.expectedCheckOutAt))} required />
-            <Field label="Nightly rate (₹)" name="nightlyRate" type="number" min={1} step="0.01" defaultValue={String(Number(booking.nightlyRatePaise) / 100)} required />
-            <SelectField label="Billing type" name="billingType" value={billingType} onChange={(event) => setBillingType(event.target.value)} options={[["NON_GST", "Non-GST bill"], ["GST", "GST tax invoice"]]} />
+            <SelectField label="Assigned room" name="roomId" defaultValue={String(booking.roomId)} options={rooms.map((room) => [String(room.id), `${String(room.roomNumber)} · ${String(room.roomType)}`])} disabled={hasInvoice} />
+            <Field label="Expected check-out" name="expectedCheckOutAt" type="datetime-local" defaultValue={toLocalInput(String(booking.expectedCheckOutAt))} required disabled={hasInvoice} />
+            <Field label="Nightly rate (₹)" name="nightlyRate" type="number" min={1} step="0.01" defaultValue={String(Number(booking.nightlyRatePaise) / 100)} required disabled={hasInvoice} />
+            <SelectField label="Billing type" name="billingType" value={billingType} onChange={(event) => setBillingType(event.target.value)} options={[["NON_GST", "Non-GST bill"], ["GST", "GST tax invoice"]]} disabled={hasInvoice} />
           </div>
           {billingType === "GST" ? (
             <GstBillingSection
@@ -555,15 +573,16 @@ function StayForm({ booking, data, onClose, onSwitch, onSuccess }: FormProps & {
               defaultCompanyName={String(booking.companyName || "")}
               defaultGstin={String(booking.guestGstin || "")}
               defaultState={String(booking.guestState || data.property?.state || "Maharashtra")}
+              disabled={hasInvoice}
             />
           ) : (
             <input type="hidden" name="guestState" value={String(booking.guestState || data.property?.state || "Maharashtra")} />
           )}
-          <TextArea label="Stay notes" name="notes" defaultValue={String(booking.notes)} />
+          <TextArea label="Stay notes" name="notes" defaultValue={String(booking.notes)} disabled={hasInvoice} />
         </FormSection>
-        <TextArea label="Admin override reason" name="reason" placeholder="Required and stored permanently" required />
+        <TextArea label="Admin override reason" name="reason" placeholder={hasInvoice ? "Stay locked (invoice exists)" : "Required and stored permanently"} required disabled={hasInvoice} />
         <FormError message={error} />
-        <ModalFooter onClose={onClose} busy={busy} submitLabel="Apply admin override" icon={<ShieldCheck size={16} />} />
+        <ModalFooter onClose={onClose} busy={busy} submitLabel="Apply admin override" icon={<ShieldCheck size={16} />} disabled={hasInvoice} />
       </form>
     </Modal>
   );
