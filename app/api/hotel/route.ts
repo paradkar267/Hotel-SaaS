@@ -571,13 +571,8 @@ async function createCheckIn(
       updated_at: checkInAt,
     });
 
-    // Link invoice_id to all created bookings & insert itemized line items for each room
+    // Insert itemized line items for each room
     for (const b of createdBookings) {
-      await supabase.from("bookings")
-        .update({ invoice_id: invoiceId, updated_at: checkInAt })
-        .eq("id", b.id)
-        .eq("tenant_id", session.tenantId);
-
       const itemAmountPaise = Number(b.nightly_rate_paise) * nights;
       await supabase.from("invoice_items").insert({
         id: id("itm"),
@@ -754,7 +749,7 @@ async function createInvoice(
 
   const { data, error: primaryError } = await supabase
     .from("bookings")
-    .select("id, booking_number, guest_id, check_in_at, billing_type, nightly_rate_paise, guest_state, status, invoice_id, properties(state), rooms(room_number)")
+    .select("id, booking_number, guest_id, check_in_at, billing_type, nightly_rate_paise, guest_state, status, rooms(room_number)")
     .eq("id", payload.bookingId)
     .eq("tenant_id", session.tenantId)
     .maybeSingle();
@@ -767,9 +762,9 @@ async function createInvoice(
   if (!queryBooking) {
     const { data: altBooking, error: altError } = await supabase
       .from("bookings")
-      .select("id, booking_number, guest_id, check_in_at, billing_type, nightly_rate_paise, guest_state, status, invoice_id, properties(state), rooms(room_number)")
+      .select("id, booking_number, guest_id, check_in_at, billing_type, nightly_rate_paise, guest_state, status, rooms(room_number)")
       .eq("tenant_id", session.tenantId)
-      .or(`booking_number.eq.${payload.bookingId},invoice_id.eq.${payload.bookingId}`)
+      .or(`booking_number.eq.${payload.bookingId}`)
       .maybeSingle();
     
     if (altError) {
@@ -781,7 +776,7 @@ async function createInvoice(
   if (!queryBooking) {
     const { data: recentBooking, error: recentError } = await supabase
       .from("bookings")
-      .select("id, booking_number, guest_id, check_in_at, billing_type, nightly_rate_paise, guest_state, status, invoice_id, properties(state), rooms(room_number)")
+      .select("id, booking_number, guest_id, check_in_at, billing_type, nightly_rate_paise, guest_state, status, rooms(room_number)")
       .eq("tenant_id", session.tenantId)
       .order("check_in_at", { ascending: false })
       .limit(1)
@@ -801,7 +796,7 @@ async function createInvoice(
   // Find all related bookings for this guest created in the same check-in session
   const { data: groupBookings } = await supabase
     .from("bookings")
-    .select("id, nightly_rate_paise, invoice_id, rooms(room_number)")
+    .select("id, nightly_rate_paise, rooms(room_number)")
     .eq("tenant_id", session.tenantId)
     .eq("guest_id", booking.guest_id)
     .eq("check_in_at", booking.check_in_at);
@@ -809,20 +804,29 @@ async function createInvoice(
   const allBookings = groupBookings && groupBookings.length > 0 ? groupBookings : [booking];
 
   // Check if an invoice already exists for ANY room in this reservation session
-  const existingInvoiceId = allBookings.find(b => b.invoice_id)?.invoice_id;
-  if (existingInvoiceId) {
-    const { data: existingInv } = await supabase
-      .from("invoices")
-      .select("id, invoice_number, total_paise")
-      .eq("id", existingInvoiceId)
-      .maybeSingle();
-    if (existingInv) {
-      return { invoiceId: existingInv.id, invoiceNumber: existingInv.invoice_number, totalPaise: existingInv.total_paise, message: `Consolidated invoice ${existingInv.invoice_number} is active for this multi-room reservation.` };
-    }
+  const bookingIds = allBookings.map(b => b.id);
+  const { data: existingInvoices } = await supabase
+    .from("invoices")
+    .select("id, invoice_number, total_paise")
+    .in("booking_id", bookingIds)
+    .neq("status", "VOID");
+
+  const existingInv = existingInvoices && existingInvoices.length > 0 ? existingInvoices[0] : null;
+  if (existingInv) {
+    return { invoiceId: existingInv.id, invoiceNumber: existingInv.invoice_number, totalPaise: existingInv.total_paise, message: `Consolidated invoice ${existingInv.invoice_number} is active for this multi-room reservation.` };
   }
 
   // Calculate sum of nightly rates across ALL booked rooms in this check-in session
   const totalRoomRatePaise = allBookings.reduce((sum, b) => sum + Number(b.nightly_rate_paise), 0);
+
+  const { data: propertyData } = await supabase
+    .from("properties")
+    .select("state")
+    .eq("id", session.propertyId)
+    .eq("tenant_id", session.tenantId)
+    .maybeSingle();
+
+  const propertyState = propertyData?.state || "Maharashtra";
 
   const billingType = booking.billing_type as BillingType;
   const invoice = calculateInvoice({
@@ -831,7 +835,7 @@ async function createInvoice(
     nights: payload.nights,
     extrasPaise: toPaise(payload.extras),
     gstRateBps: payload.gstRateBps,
-    propertyState: String((booking.properties as any)?.state),
+    propertyState,
     guestState: String(booking.guest_state),
   });
   
@@ -860,13 +864,8 @@ async function createInvoice(
     updated_at: issuedAt,
   });
 
-  // Attach invoice_id & insert invoice items for each room in this check-in session
+  // Insert invoice items for each room in this check-in session
   for (const b of allBookings) {
-    await supabase.from("bookings")
-      .update({ invoice_id: invoiceId, updated_at: issuedAt })
-      .eq("id", b.id)
-      .eq("tenant_id", session.tenantId);
-
     const roomNum = (b.rooms as any)?.room_number || "Room";
     const itemAmountPaise = Number(b.nightly_rate_paise) * payload.nights;
 
