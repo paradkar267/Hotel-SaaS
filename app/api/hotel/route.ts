@@ -750,36 +750,53 @@ async function createInvoice(
   ipAddress: string,
 ) {
   const supabase = await createClient();
-  let { data: booking } = await supabase
+  let queryBooking: any = null;
+
+  const { data, error: primaryError } = await supabase
     .from("bookings")
     .select("id, booking_number, guest_id, check_in_at, billing_type, nightly_rate_paise, guest_state, status, invoice_id, properties(state), rooms(room_number)")
     .eq("id", payload.bookingId)
     .eq("tenant_id", session.tenantId)
     .maybeSingle();
 
-  if (!booking) {
-    const { data: altBooking } = await supabase
+  if (primaryError) {
+    throw new AccessError(`DB error (primary): ${primaryError.message} (code: ${primaryError.code}, details: ${primaryError.details})`, 400);
+  }
+  queryBooking = data;
+
+  if (!queryBooking) {
+    const { data: altBooking, error: altError } = await supabase
       .from("bookings")
       .select("id, booking_number, guest_id, check_in_at, billing_type, nightly_rate_paise, guest_state, status, invoice_id, properties(state), rooms(room_number)")
       .eq("tenant_id", session.tenantId)
       .or(`booking_number.eq.${payload.bookingId},invoice_id.eq.${payload.bookingId}`)
       .maybeSingle();
-    booking = altBooking;
+    
+    if (altError) {
+      throw new AccessError(`DB error (alt): ${altError.message}`, 400);
+    }
+    queryBooking = altBooking;
   }
 
-  if (!booking) {
-    const { data: recentBooking } = await supabase
+  if (!queryBooking) {
+    const { data: recentBooking, error: recentError } = await supabase
       .from("bookings")
       .select("id, booking_number, guest_id, check_in_at, billing_type, nightly_rate_paise, guest_state, status, invoice_id, properties(state), rooms(room_number)")
       .eq("tenant_id", session.tenantId)
       .order("check_in_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    booking = recentBooking;
+
+    if (recentError) {
+      throw new AccessError(`DB error (recent): ${recentError.message}`, 400);
+    }
+    queryBooking = recentBooking;
   }
 
-  if (!booking) throw new AccessError("Stay not found.", 404);
-  if (booking.status !== "CHECKED_IN" && booking.status !== "CHECKED_OUT") throw new AccessError("Invoices can only be created for stays.", 409);
+  if (!queryBooking) throw new AccessError("Stay not found in DB.", 404);
+  if (queryBooking.status !== "CHECKED_IN" && queryBooking.status !== "CHECKED_OUT") throw new AccessError("Invoices can only be created for stays.", 409);
+  
+  const booking = queryBooking;
   
   // Find all related bookings for this guest created in the same check-in session
   const { data: groupBookings } = await supabase
