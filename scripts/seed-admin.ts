@@ -16,16 +16,16 @@ async function main() {
     INSERT INTO tenants (id, name, created_at) VALUES ('${tenantId}', 'HotelOS Primary Tenant', '${now}') ON CONFLICT(id) DO NOTHING;
     INSERT INTO properties (id, tenant_id, name, address, city, state, currency, default_gst_bps, created_at, updated_at)
        VALUES ('${propertyId}', '${tenantId}', 'The Meridian House', '18 Residency Road', 'Pune', 'Maharashtra', 'INR', 1200, '${now}', '${now}') ON CONFLICT(id) DO NOTHING;
-    INSERT INTO users (id, tenant_id, property_id, email, name, passwordHash, role, is_active, created_by, created_at, updated_at)
+    INSERT INTO users (id, tenant_id, property_id, email, name, password_hash, role, is_active, created_by, created_at, updated_at)
        VALUES ('${userId}', '${tenantId}', '${propertyId}', '${email}', '${name}', '${hashedPassword}', 'ADMIN', 1, '${userId}', '${now}', '${now}')
-       ON CONFLICT(email) DO UPDATE SET passwordHash = '${hashedPassword}';
+       ON CONFLICT(email) DO UPDATE SET password_hash = '${hashedPassword}';
   `;
 
   console.log("Generated SQL for seeding admin user:");
   console.log(sql);
   
-  console.log("\\n\\nTo execute this locally against Wrangler D1, run the following:");
-  console.log(`npx wrangler d1 execute DB --local --command="INSERT INTO tenants (id, name, created_at) VALUES ('${tenantId}', 'HotelOS Primary Tenant', '${now}') ON CONFLICT(id) DO NOTHING; INSERT INTO properties (id, tenant_id, name, address, city, state, currency, default_gst_bps, created_at, updated_at) VALUES ('${propertyId}', '${tenantId}', 'The Meridian House', '18 Residency Road', 'Pune', 'Maharashtra', 'INR', 1200, '${now}', '${now}') ON CONFLICT(id) DO NOTHING; INSERT INTO users (id, tenant_id, property_id, email, name, passwordHash, role, is_active, created_by, created_at, updated_at) VALUES ('${userId}', '${tenantId}', '${propertyId}', '${email}', '${name}', '${hashedPassword}', 'ADMIN', 1, '${userId}', '${now}', '${now}') ON CONFLICT(email) DO UPDATE SET passwordHash = '${hashedPassword}';"`);
+  console.log("\n\nTo execute this locally against Wrangler D1, run the following:");
+  console.log(`npx wrangler d1 execute DB --local --command="INSERT INTO tenants (id, name, created_at) VALUES ('${tenantId}', 'HotelOS Primary Tenant', '${now}') ON CONFLICT(id) DO NOTHING; INSERT INTO properties (id, tenant_id, name, address, city, state, currency, default_gst_bps, created_at, updated_at) VALUES ('${propertyId}', '${tenantId}', 'The Meridian House', '18 Residency Road', 'Pune', 'Maharashtra', 'INR', 1200, '${now}', '${now}') ON CONFLICT(id) DO NOTHING; INSERT INTO users (id, tenant_id, property_id, email, name, password_hash, role, is_active, created_by, created_at, updated_at) VALUES ('${userId}', '${tenantId}', '${propertyId}', '${email}', '${name}', '${hashedPassword}', 'ADMIN', 1, '${userId}', '${now}', '${now}') ON CONFLICT(email) DO UPDATE SET password_hash = '${hashedPassword}';"`);
 }
 
 main().catch(console.error);
