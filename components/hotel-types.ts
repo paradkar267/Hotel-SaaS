@@ -24,7 +24,6 @@ export type HotelData = {
   users: Row[];
   auditLogs: Row[];
   latestAuditId: number;
-  announcement?: string;
 };
 
 export type ModalState =
@@ -34,11 +33,11 @@ export type ModalState =
   | { type: "guest"; guest: Row }
   | { type: "stay"; booking: Row }
   | { type: "invoice"; booking: Row }
+  | { type: "view_invoice"; invoice: Row }
   | { type: "payment"; invoice: Row }
   | { type: "checkout"; booking: Row }
   | { type: "room"; room: Row }
   | { type: "settings" }
   | { type: "void_invoice"; invoice: Row }
-  | { type: "print_invoice"; invoice: Row }
-  | { type: "edit_room"; room: Row }
   | null;
+

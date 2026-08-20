@@ -1,4 +1,4 @@
-# HotelOS Management SaaS (Production Release)
+# HotelOS Management SaaS
 
 HotelOS is a cloud hotel-operations product for a single property or tenant-isolated hotel group. It gives the admin full control while keeping the manager role deliberately narrow: managers can register and check in guests, upload ID proof, and view live operations; confirmed records are locked against manager edits.
 

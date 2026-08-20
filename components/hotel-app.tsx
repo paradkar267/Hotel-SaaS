@@ -17,10 +17,8 @@ import {
   Hotel,
   LoaderCircle,
   LockKeyhole,
-  Megaphone,
   Menu,
   Plus,
-  Printer,
   RefreshCw,
   Search,
   Settings,
@@ -34,7 +32,7 @@ import { useCallback, useEffect, useState } from "react";
 import { HotelActionModal } from "./hotel-actions";
 import type { HotelData, Identity, ModalState, Row, View } from "./hotel-types";
 import { logoutAction } from "../app/actions/auth";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
 const navItems = [
   { id: "overview", label: "Overview", icon: Gauge },
@@ -185,7 +183,7 @@ export default function HotelApp({ identity, signOutPath }: { identity: Identity
           {view === "overview" && isAdmin ? <AdminOverview data={data} onModal={setModal} /> : null}
           {view === "overview" && !isAdmin ? <ManagerOverview data={data} onModal={setModal} /> : null}
           {view === "frontdesk" ? <FrontDesk data={data} isAdmin={isAdmin} onModal={setModal} /> : null}
-          {view === "rooms" ? <RoomsView data={data} isAdmin={isAdmin} onModal={setModal} /> : null}
+          {view === "rooms" ? <RoomsView data={data} onModal={setModal} /> : null}
           {view === "guests" ? <Guests data={data} onModal={setModal} /> : null}
           {view === "billing" ? <Billing data={data} onModal={setModal} /> : null}
           {view === "team" && isAdmin ? <Team data={data} onModal={setModal} /> : null}
@@ -215,27 +213,11 @@ function AdminOverview({ data, onModal }: { data: HotelData; onModal: (modal: Mo
     { name: 'Sun', revenue: isAdmin ? (data.metrics.todayRevenuePaise / 100) : 0 },
   ];
 
-  const occupancyDataRaw = [
+  const occupancyData = [
     { name: 'Occupied', value: data.metrics.occupiedRooms },
     { name: 'Available', value: data.metrics.availableRooms },
-    { name: 'Housekeeping', value: data.rooms.filter(r => r.status === "HOUSEKEEPING").length },
-    { name: 'Maintenance', value: data.rooms.filter(r => r.status === "MAINTENANCE").length },
   ];
-  
-  const occupancyData = occupancyDataRaw.filter(d => d.value > 0);
-  if (occupancyData.length === 0) {
-    occupancyData.push({ name: 'No Rooms', value: 1 });
-  }
-
-  const getStatusColor = (name: string) => {
-    switch (name) {
-      case 'Available': return '#10b981';
-      case 'Occupied': return '#f59e0b';
-      case 'Housekeeping': return '#8b5cf6';
-      case 'Maintenance': return '#ef4444';
-      default: return '#e2e8f0';
-    }
-  };
+  const COLORS = ['#2563eb', '#e2e8f0'];
 
   return (
     <>
@@ -243,13 +225,6 @@ function AdminOverview({ data, onModal }: { data: HotelData; onModal: (modal: Mo
         <div><p className="eyebrow">Live property view</p><h1>{timeGreeting()}, {firstName(data.session.name)}</h1><p>{isAdmin ? "Everything happening across the hotel, in one place." : "Your front desk is ready for today’s arrivals."}</p></div>
         <div className="heading-note"><Sparkles size={16} /><span><b>{data.metrics.availableRooms} rooms ready</b><small>for immediate check-in</small></span></div>
       </section>
-
-      {data.announcement && (
-        <div className="announcement-banner">
-          <Megaphone size={16} />
-          <span><b>Platform Notice:</b> {data.announcement}</span>
-        </div>
-      )}
       
       <section className="metrics-grid">
         <Metric icon={Gauge} label="Occupancy" value={`${data.metrics.occupancyRate}%`} detail={`${data.metrics.occupiedRooms} of ${data.metrics.totalRooms} rooms`} tone="navy" />
@@ -267,28 +242,15 @@ function AdminOverview({ data, onModal }: { data: HotelData; onModal: (modal: Mo
                  <AreaChart data={revenueData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                    <defs>
                      <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                       <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.25}/>
-                       <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+                       <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3}/>
+                       <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
                      </linearGradient>
                    </defs>
-                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b', fontWeight: 500}} />
-                   <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b', fontWeight: 500}} tickFormatter={(value) => '₹' + (value >= 1000 ? (value / 1000) + 'k' : value)} />
-                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#cbd5e1" strokeOpacity={0.4} />
-                   <Tooltip
-                     contentStyle={{ background: 'rgba(15, 23, 42, 0.95)', border: 'none', borderRadius: '12px', color: '#fff', fontSize: '12px', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.15)' }}
-                     itemStyle={{ color: '#fff' }}
-                     formatter={(value: any) => [`₹${Number(value).toLocaleString()}`, 'Revenue']}
-                   />
-                   <Area
-                     type="monotone"
-                     dataKey="revenue"
-                     stroke="#4f46e5"
-                     strokeWidth={3.5}
-                     fillOpacity={1}
-                     fill="url(#colorRevenue)"
-                     dot={{ r: 4, strokeWidth: 2, stroke: '#fff', fill: '#4f46e5' }}
-                     activeDot={{ r: 6, strokeWidth: 0 }}
-                   />
+                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} />
+                   <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} />
+                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                   <Tooltip formatter={(value: any) => [`₹${Number(value).toLocaleString()}`, 'Revenue']} />
+                   <Area type="monotone" dataKey="revenue" stroke="#4f46e5" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
                  </AreaChart>
                </ResponsiveContainer>
              </div>
@@ -299,33 +261,12 @@ function AdminOverview({ data, onModal }: { data: HotelData; onModal: (modal: Mo
              <div className="chart-container" style={{ height: 250, width: '100%', marginTop: '1rem' }}>
                <ResponsiveContainer width="100%" height="100%">
                  <PieChart>
-                   <Pie
-                     data={occupancyData}
-                     cx="50%"
-                     cy="50%"
-                     innerRadius={55}
-                     outerRadius={75}
-                     cornerRadius={6}
-                     paddingAngle={4}
-                     dataKey="value"
-                     stroke="none"
-                   >
+                   <Pie data={occupancyData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
                      {occupancyData.map((entry, index) => (
-                       <Cell key={`cell-${index}`} fill={getStatusColor(entry.name)} />
+                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                      ))}
                    </Pie>
-                   <Tooltip
-                     contentStyle={{ background: 'rgba(15, 23, 42, 0.95)', border: 'none', borderRadius: '12px', color: '#fff', fontSize: '12px', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.15)' }}
-                     itemStyle={{ color: '#fff' }}
-                     formatter={(value: any, name: any) => [name === 'No Rooms' ? 0 : value, name]}
-                   />
-                   <Legend
-                     verticalAlign="bottom"
-                     height={36}
-                     iconType="circle"
-                     iconSize={8}
-                     wrapperStyle={{ fontSize: '11px', fontWeight: 600, color: '#475569' }}
-                   />
+                   <Tooltip />
                  </PieChart>
                </ResponsiveContainer>
              </div>
@@ -359,13 +300,17 @@ function AdminOverview({ data, onModal }: { data: HotelData; onModal: (modal: Mo
           </div>
         </article>
       </section>
-      <article className="panel table-panel"><PanelHeading title="Guests currently in-house" subtitle="Manage active stays and check-outs" /><StayTable bookings={active} isAdmin={isAdmin} onManage={(booking) => onModal({ type: "stay", booking })} /></article>
+      <article className="panel table-panel">
+        <PanelHeading title="Guests currently in-house" subtitle="Manage active stays, invoices, and check-outs" />
+        <StayTable bookings={active} invoices={data.invoices} isAdmin={isAdmin} onManage={(booking) => onModal({ type: "stay", booking })} onModal={onModal} />
+      </article>
     </>
   );
 }
 
 function ManagerOverview({ data, onModal }: { data: HotelData; onModal: (modal: ModalState) => void }) {
   const active = data.bookings.filter((booking) => booking.status === "CHECKED_IN").slice(0, 5);
+  const expectedArrivals = data.bookings.filter((booking) => booking.status === "CONFIRMED" && new Date(String(booking.checkInAt)).toDateString() === new Date().toDateString());
   const housekeepingRooms = data.rooms.filter(r => r.status === "HOUSEKEEPING");
   const maintenanceRooms = data.rooms.filter(r => r.status === "MAINTENANCE");
 
@@ -375,13 +320,6 @@ function ManagerOverview({ data, onModal }: { data: HotelData; onModal: (modal: 
         <div><p className="eyebrow">Front Desk Operations</p><h1>{timeGreeting()}, {firstName(data.session.name)}</h1><p>Here is your daily operational summary.</p></div>
         <div className="heading-note"><Sparkles size={16} /><span><b>{data.metrics.availableRooms} rooms ready</b><small>for immediate check-in</small></span></div>
       </section>
-
-      {data.announcement && (
-        <div className="announcement-banner">
-          <Megaphone size={16} />
-          <span><b>Platform Notice:</b> {data.announcement}</span>
-        </div>
-      )}
 
       <section className="module-banner secure" style={{ marginBottom: "2rem" }}>
         <DoorOpen size={22} />
@@ -395,7 +333,7 @@ function ManagerOverview({ data, onModal }: { data: HotelData; onModal: (modal: 
       </section>
       
       <section className="metrics-grid">
-        <Metric icon={Users} label="Today's Check-ins" value={String(data.metrics.todayCheckIns)} detail="Arrivals so far today" tone="navy" />
+        <Metric icon={Users} label="Expected Arrivals" value={String(expectedArrivals.length)} detail="Pending check-ins today" tone="navy" />
         <Metric icon={ClipboardCheck} label="In-House Guests" value={String(data.metrics.activeStays)} detail="Currently checked in" tone="green" />
         <Metric icon={BedDouble} label="Housekeeping" value={String(housekeepingRooms.length)} detail="Rooms to be cleaned" tone="amber" />
         <Metric icon={Gauge} label="Maintenance" value={String(maintenanceRooms.length)} detail="Out of order" tone="violet" />
@@ -415,61 +353,108 @@ function ManagerOverview({ data, onModal }: { data: HotelData; onModal: (modal: 
         </article>
         
         <article className="panel activity-panel">
-          <PanelHeading title="Live activity" subtitle="Recent front desk actions" />
+          <PanelHeading title="Live activity" subtitle="Your latest actions" />
           <div className="activity-list">
-            {data.auditLogs.slice(0, 6).map((item, index) => (
+            {data.bookings.slice(0, 6).map((item, index) => (
               <div className="activity-item" key={String(item.id)}>
                 <span className={`activity-icon tone-${index % 4}`}><Activity size={15} /></span>
-                <div><b>{actionLabel(String(item.action))}</b><small>{`${String(item.actorEmail)} · ${String(item.module)}`}</small></div>
-                <time>{relativeTime(String(item.createdAt))}</time>
+                <div><b>{`${String(item.guestName)} checked in`}</b><small>{`Room ${String(item.roomNumber)}`}</small></div>
+                <time>{relativeTime(String(item.checkInAt))}</time>
               </div>
             ))}
-            {data.auditLogs.length === 0 ? <Empty compact title="No activity yet" text="Your first action will appear here instantly." /> : null}
+            {data.bookings.length === 0 ? <Empty compact title="No activity yet" text="Your first check-in will appear here instantly." /> : null}
           </div>
         </article>
       </section>
       
       <article className="panel table-panel">
-        <PanelHeading title="Guests currently in-house" subtitle="Manage active stays and check-outs" />
-        <StayTable bookings={active} isAdmin={false} onManage={(booking) => onModal({ type: "stay", booking })} />
+        <PanelHeading title="Guests currently in-house" subtitle="Manage active stays, invoices, and check-outs" />
+        <StayTable bookings={active} invoices={data.invoices} isAdmin={false} onManage={(booking) => onModal({ type: "stay", booking })} onModal={onModal} />
       </article>
     </>
   );
 }
 
 function FrontDesk({ data, isAdmin, onModal }: { data: HotelData; isAdmin: boolean; onModal: (modal: ModalState) => void }) {
-  return <ModuleShell eyebrow="Operations" title="Front desk" description="Create check-ins, manage stays, and oversee front desk activity."><div className="module-banner"><BookOpenCheck size={22} /><div><b>Check-in workflow is ready</b><span>Guest details, room allocation, ID proof, and billing preference are stored together.</span></div><button className="primary-button compact" onClick={() => onModal({ type: "checkin" })}><Plus size={17} /> Start check-in</button></div><article className="panel table-panel"><PanelHeading title="Active & recent stays" subtitle={`${data.metrics.activeStays} guests currently in-house`} /><StayTable bookings={data.bookings} isAdmin={isAdmin} onManage={(booking) => onModal({ type: "stay", booking })} /></article></ModuleShell>;
+  return (
+    <ModuleShell eyebrow="Operations" title="Front desk" description="Create check-ins, manage stays, generate invoices, and oversee front desk activity.">
+      <div className="module-banner">
+        <BookOpenCheck size={22} />
+        <div>
+          <b>Check-in workflow is ready</b>
+          <span>Guest details, room allocation, ID proof, and billing preference are stored together.</span>
+        </div>
+        <button className="primary-button compact" onClick={() => onModal({ type: "checkin" })}>
+          <Plus size={17} /> Start check-in
+        </button>
+      </div>
+      <article className="panel table-panel">
+        <PanelHeading title="Active & recent stays" subtitle={`${data.metrics.activeStays} guests currently in-house`} />
+        <StayTable bookings={data.bookings} invoices={data.invoices} isAdmin={isAdmin} onManage={(booking) => onModal({ type: "stay", booking })} onModal={onModal} />
+      </article>
+    </ModuleShell>
+  );
 }
 
 function Guests({ data, onModal }: { data: HotelData; onModal: (modal: ModalState) => void }) {
   const [query, setQuery] = useState("");
   const guests = data.guests.filter((guest) => [guest.fullName, guest.phone, guest.email].some((value) => String(value).toLowerCase().includes(query.toLowerCase())));
-  return <ModuleShell eyebrow="Guest CRM" title="Guest registry" description="Search verified guest profiles and their stay history."><SearchBar placeholder="Search by guest, phone, or email" value={query} onChange={setQuery} /><article className="panel table-panel"><PanelHeading title="All guest profiles" subtitle={`${guests.length} cloud records`} />{guests.length ? <div className="table-scroll"><table><thead><tr><th>Guest</th><th>Contact</th><th>City</th><th>ID proof</th><th>Stays</th><th>Lifetime value</th><th /></tr></thead><tbody>{guests.map((guest) => <tr key={String(guest.id)}><td><div className="primary-cell"><span className="mini-avatar">{initials(String(guest.fullName))}</span><span><b>{String(guest.fullName)}</b></span></div></td><td><b>{String(guest.phone)}</b><small className="table-sub">{String(guest.email || "No email")}</small></td><td>{String(guest.city || "—")}</td><td><div className="document-cell"><span className="plain-chip">{String(guest.idType || "Not set").replaceAll("_", " ")} · •••• {String(guest.idLast4 || "—")}</span>{guest.latestDocumentId ? <a href={`/api/documents?id=${encodeURIComponent(String(guest.latestDocumentId))}`} target="_blank" rel="noreferrer">Open proof</a> : null}</div></td><td>{String(guest.totalStays)}</td><td>{money(Number(guest.totalSpendPaise))}</td><td><button className="row-action" onClick={() => onModal({ type: "guest", guest })}>Edit</button></td></tr>)}</tbody></table></div> : <Empty title="No matching guests" text="Try a different name, phone, or email." />}</article></ModuleShell>;
+  return <ModuleShell eyebrow="Guest CRM" title="Guest registry" description="Search verified guest profiles and their stay history."><SearchBar placeholder="Search by guest, phone, or email" value={query} onChange={setQuery} /><article className="panel table-panel"><PanelHeading title="All guest profiles" subtitle={`${guests.length} cloud records`} />{guests.length ? <div className="table-scroll"><table><thead><tr><th>Guest</th><th>Contact</th><th>Location</th><th>ID proof</th><th>Stays</th><th>Lifetime value</th><th /></tr></thead><tbody>{guests.map((guest) => <tr key={String(guest.id)}><td><div className="primary-cell"><span className="mini-avatar">{initials(String(guest.fullName))}</span><span><b>{String(guest.fullName)}</b><small>{String(guest.nationality)}</small></span></div></td><td><b>{String(guest.phone)}</b><small className="table-sub">{String(guest.email || "No email")}</small></td><td>{[guest.city, guest.state].filter(Boolean).join(", ") || "—"}</td><td><div className="document-cell"><span className="plain-chip">{String(guest.idType || "Not set").replaceAll("_", " ")} · •••• {String(guest.idLast4 || "—")}</span>{guest.latestDocumentId ? <a href={`/api/documents?id=${encodeURIComponent(String(guest.latestDocumentId))}`} target="_blank" rel="noreferrer">Open proof</a> : null}</div></td><td>{String(guest.totalStays)}</td><td>{money(Number(guest.totalSpendPaise))}</td><td><button className="row-action" onClick={() => onModal({ type: "guest", guest })}>Edit</button></td></tr>)}</tbody></table></div> : <Empty title="No matching guests" text="Try a different name, phone, or email." />}</article></ModuleShell>;
 }
 
 function Billing({ data, onModal }: { data: HotelData; onModal: (modal: ModalState) => void }) {
-  const pendingStay = data.bookings.find((booking) => booking.status === "CHECKED_IN" && !booking.invoiceId);
+  const unbilledStays = data.bookings.filter((booking) => booking.status === "CHECKED_IN" && !booking.invoiceId);
   return (
-    <ModuleShell eyebrow="Manual accounts" title="Billing" description="Issue GST or non-GST invoices, generate clean printable PDFs, and record offline payments.">
+    <ModuleShell eyebrow="Manual accounts" title="Billing & Invoicing" description="Issue GST or non-GST invoices, preview/print bills, and record offline payments—no gateway involved.">
       <section className="mini-metrics">
         <div><span>Outstanding</span><b>{money(data.metrics.outstandingPaise)}</b></div>
         <div><span>Collected today</span><b>{money(data.metrics.todayRevenuePaise)}</b></div>
         <div><span>Total invoices</span><b>{data.invoices.length}</b></div>
+        <div><span>Unbilled stays</span><b style={{ color: unbilledStays.length > 0 ? "#ea580c" : "#16a34a" }}>{unbilledStays.length}</b></div>
       </section>
-      {pendingStay ? (
-        <div className="module-banner billing-banner">
-          <FileText size={22} />
-          <div>
-            <b>{String(pendingStay.guestName)} is ready for billing</b>
-            <span>Room {String(pendingStay.roomNumber)} · {String(pendingStay.billingType).replace("_", "-")}</span>
+
+      {unbilledStays.length > 0 ? (
+        <article className="panel" style={{ marginBottom: "1.5rem", borderLeft: "4px solid #2563eb", background: "#f8fafc" }}>
+          <PanelHeading title="Stays Ready for Invoicing" subtitle="Active check-ins that do not have an invoice generated yet" />
+          <div className="table-scroll" style={{ marginTop: "0.5rem" }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Guest Name</th>
+                  <th>Room</th>
+                  <th>Check-In</th>
+                  <th>Billing Format</th>
+                  <th>Tariff</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {unbilledStays.map((stay) => (
+                  <tr key={String(stay.id)}>
+                    <td><b>{String(stay.guestName)}</b><small className="table-sub">{String(stay.phone)}</small></td>
+                    <td><b>Room {String(stay.roomNumber)}</b></td>
+                    <td>{formatDate(String(stay.checkInAt))}</td>
+                    <td><span className="plain-chip">{String(stay.billingType).replace("_", "-")}</span></td>
+                    <td><b>{money(Number(stay.nightlyRatePaise))}</b>/night</td>
+                    <td>
+                      <button
+                        className="primary-button compact"
+                        onClick={() => onModal({ type: "invoice", booking: stay })}
+                        style={{ fontSize: "0.85rem", padding: "6px 12px", background: "#2563eb" }}
+                      >
+                        <Plus size={15} /> 📄 Generate {stay.billingType === "GST" ? "GST Invoice" : "Bill"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          <button className="primary-button compact" onClick={() => onModal({ type: "invoice", booking: pendingStay })}>
-            <Plus size={17} /> Create invoice
-          </button>
-        </div>
+        </article>
       ) : null}
+
       <article className="panel table-panel">
-        <PanelHeading title="Invoice register" subtitle="GST, non-GST, partial, and paid records" />
+        <PanelHeading title="Invoice register" subtitle="GST, non-GST, partial and paid records" />
         {data.invoices.length ? (
           <div className="table-scroll">
             <table>
@@ -487,23 +472,28 @@ function Billing({ data, onModal }: { data: HotelData; onModal: (modal: ModalSta
               <tbody>
                 {data.invoices.map((invoice) => (
                   <tr key={String(invoice.id)}>
-                    <td>
-                      <b>{String(invoice.invoiceNumber)}</b>
-                      <small className="table-sub">{formatDate(String(invoice.issuedAt))}</small>
-                    </td>
-                    <td>{String(invoice.guestName)} · {String(invoice.roomNumber).includes(",") || String(invoice.roomNumber).includes("Rooms") ? `Rooms ${String(invoice.roomNumber)}` : `Room ${String(invoice.roomNumber)}`}</td>
+                    <td><b>{String(invoice.invoiceNumber)}</b><small className="table-sub">{formatDate(String(invoice.issuedAt))}</small></td>
+                    <td>{String(invoice.guestName)} · Room {String(invoice.roomNumber)}</td>
                     <td><span className="plain-chip">{String(invoice.billingType).replace("_", "-")}</span></td>
                     <td><b>{money(Number(invoice.totalPaise))}</b></td>
                     <td>{money(Number(invoice.balancePaise))}</td>
                     <td><span className={`status-chip ${String(invoice.status).toLowerCase()}`}>{prettyStatus(String(invoice.status))}</span></td>
                     <td>
-                      <div className="row-actions">
-                        <button className="row-action" onClick={() => onModal({ type: "print_invoice", invoice })}>
-                          <Printer size={13} style={{ marginRight: 4 }} /> View / Print
+                      <div className="row-actions" style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                        <button
+                          className="row-action"
+                          style={{ background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: "4px", padding: "4px 8px", cursor: "pointer", fontSize: "0.8rem" }}
+                          onClick={() => onModal({ type: "view_invoice", invoice })}
+                        >
+                          👁️ View / Print
                         </button>
                         {["UNPAID", "PARTIAL"].includes(String(invoice.status)) ? (
-                          <button className="row-action primary" onClick={() => onModal({ type: "payment", invoice })}>
-                            Pay
+                          <button
+                            className="row-action primary"
+                            style={{ background: "#16a34a", color: "#fff", border: "none", borderRadius: "4px", padding: "4px 8px", cursor: "pointer", fontSize: "0.8rem", fontWeight: 600 }}
+                            onClick={() => onModal({ type: "payment", invoice })}
+                          >
+                            💳 Record payment
                           </button>
                         ) : null}
                         {invoice.status === "UNPAID" && Number(invoice.paidPaise) === 0 ? (
@@ -522,7 +512,7 @@ function Billing({ data, onModal }: { data: HotelData; onModal: (modal: ModalSta
             </table>
           </div>
         ) : (
-          <Empty title="No invoices yet" text="Create an invoice from an active stay." />
+          <Empty title="No invoices yet" text="Generate an invoice from an active check-in above." />
         )}
       </article>
     </ModuleShell>
@@ -534,55 +524,7 @@ function Team({ data, onModal }: { data: HotelData; onModal: (modal: ModalState)
 }
 
 function Audit({ data }: { data: HotelData }) {
-  if (!data.auditLogs.length) {
-    return (
-      <ModuleShell eyebrow="Accountability" title="Audit trail" description="Every sensitive create, edit, access, and billing action—who, what, and when.">
-        <article className="panel table-panel">
-          <PanelHeading title="Change history" subtitle="Append-only operational log" />
-          <Empty title="Nothing here yet" text="Records will appear here as your hotel starts operating." />
-        </article>
-      </ModuleShell>
-    );
-  }
-
-  return (
-    <ModuleShell eyebrow="Accountability" title="Audit trail" description="Every sensitive create, edit, access, and billing action—who, what, and when.">
-      <article className="panel table-panel">
-        <PanelHeading title="Change history" subtitle="Append-only operational log" />
-        <div className="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Action</th>
-                <th>Module</th>
-                <th>Performed by</th>
-                <th>Reason</th>
-                <th>Time</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.auditLogs.map((log, i) => (
-                <tr key={i} style={log.actorRole === "MANAGER" ? { backgroundColor: "var(--amber-light, #fef3c7)" } : {}}>
-                  <td>
-                    <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                      {actionLabel(String(log.action))}
-                      {log.actorRole === "MANAGER" && (
-                        <span className="sa-badge-amber" style={{ fontSize: "10px", padding: "2px 6px", borderRadius: "10px" }}>MANAGER</span>
-                      )}
-                    </span>
-                  </td>
-                  <td>{prettyStatus(String(log.module))}</td>
-                  <td>{String(log.actorEmail)}</td>
-                  <td>{String(log.reason || "System action")}</td>
-                  <td>{formatDateTime(String(log.createdAt))}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </article>
-    </ModuleShell>
-  );
+  return <ModuleShell eyebrow="Accountability" title="Audit trail" description="Every sensitive create, edit, access, and billing action—who, what, and when."><article className="panel table-panel"><PanelHeading title="Change history" subtitle="Append-only operational log" /><SimpleTable headers={["Action", "Module", "Performed by", "Reason", "Time"]} rows={data.auditLogs.map((log) => [actionLabel(String(log.action)), prettyStatus(String(log.module)), String(log.actorEmail), String(log.reason || "System action"), formatDateTime(String(log.createdAt))])} /></article></ModuleShell>;
 }
 
 function SettingsView({ data, onModal }: { data: HotelData; onModal: (modal: ModalState) => void }) {
@@ -639,9 +581,97 @@ function PanelHeading({ title, subtitle, action }: { title: string; subtitle: st
   return <div className="panel-heading"><div><h2>{title}</h2><p>{subtitle}</p></div>{action ? <button>{action}</button> : null}</div>;
 }
 
-function StayTable({ bookings, isAdmin, onManage }: { bookings: Row[]; isAdmin: boolean; onManage: (booking: Row) => void }) {
+function StayTable({
+  bookings,
+  invoices,
+  isAdmin,
+  onManage,
+  onModal,
+}: {
+  bookings: Row[];
+  invoices?: Row[];
+  isAdmin: boolean;
+  onManage: (booking: Row) => void;
+  onModal?: (modal: ModalState) => void;
+}) {
   if (bookings.length === 0) return <Empty title="No stays yet" text="Use New check-in to register your first guest." />;
-  return <div className="table-scroll"><table><thead><tr><th>Guest</th><th>Room</th><th>Check-in</th><th>Expected out</th><th>Billing</th><th>Status</th><th /></tr></thead><tbody>{bookings.map((booking) => <tr key={String(booking.id)}><td><div className="primary-cell"><span className="mini-avatar">{initials(String(booking.guestName))}</span><span><b>{String(booking.guestName)}</b><small>{String(booking.phone)}</small></span></div></td><td><b>{String(booking.roomNumber)}</b><small className="table-sub">{String(booking.roomType)}</small></td><td>{formatDate(String(booking.checkInAt))}</td><td>{formatDate(String(booking.expectedCheckOutAt))}</td><td><span className="plain-chip">{String(booking.billingType).replace("_", "-")}</span></td><td><span className={`status-chip ${String(booking.status).toLowerCase()}`}>{prettyStatus(String(booking.status))}</span></td><td>{booking.status === "CHECKED_IN" ? <button className="row-action" onClick={() => onManage(booking)}>Manage</button> : <span className="locked-row"><LockKeyhole size={14} /> Closed</span>}</td></tr>)}</tbody></table></div>;
+  return (
+    <div className="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Guest</th>
+            <th>Room</th>
+            <th>Check-in</th>
+            <th>Expected out</th>
+            <th>Billing Type</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {bookings.map((booking) => {
+            const hasInvoice = Boolean(booking.invoiceId);
+            const invoiceObj = invoices?.find((inv) => String(inv.bookingId) === String(booking.id) || String(inv.id) === String(booking.invoiceId));
+            const isGst = booking.billingType === "GST";
+
+            return (
+              <tr key={String(booking.id)}>
+                <td>
+                  <div className="primary-cell">
+                    <span className="mini-avatar">{initials(String(booking.guestName))}</span>
+                    <span><b>{String(booking.guestName)}</b><small>{String(booking.phone)}</small></span>
+                  </div>
+                </td>
+                <td><b>{String(booking.roomNumber)}</b><small className="table-sub">{String(booking.roomType)}</small></td>
+                <td>{formatDate(String(booking.checkInAt))}</td>
+                <td>{formatDate(String(booking.expectedCheckOutAt))}</td>
+                <td>
+                  <span className="plain-chip">{String(booking.billingType).replace("_", "-")}</span>
+                </td>
+                <td>
+                  <span className={`status-chip ${String(booking.status).toLowerCase()}`}>
+                    {prettyStatus(String(booking.status))}
+                  </span>
+                </td>
+                <td>
+                  {booking.status === "CHECKED_IN" ? (
+                    <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                      {!hasInvoice && onModal ? (
+                        <button
+                          className="row-action primary"
+                          style={{ background: "#2563eb", color: "#fff", border: "none", padding: "4px 8px", borderRadius: "4px", fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" }}
+                          onClick={() => onModal({ type: "invoice", booking })}
+                        >
+                          📄 Generate {isGst ? "GST Invoice" : "Bill"}
+                        </button>
+                      ) : null}
+
+                      {hasInvoice && onModal && invoiceObj ? (
+                        <button
+                          className="row-action"
+                          style={{ background: "#f1f5f9", color: "#0f172a", border: "1px solid #cbd5e1", padding: "4px 8px", borderRadius: "4px", fontSize: "0.8rem", cursor: "pointer" }}
+                          onClick={() => onModal({ type: "view_invoice", invoice: invoiceObj })}
+                        >
+                          👁️ View Bill
+                        </button>
+                      ) : null}
+
+                      <button className="row-action" onClick={() => onManage(booking)}>
+                        Manage
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="locked-row"><LockKeyhole size={14} /> Closed</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 function SimpleTable({ headers, rows }: { headers: string[]; rows: string[][] }) {
@@ -672,7 +702,7 @@ function formatDate(value: string) { if (!value) return "—"; return new Intl.D
 function formatDateTime(value: string) { if (!value) return "—"; return new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)); }
 function relativeTime(value: string) { const date = new Date(value); if (Number.isNaN(date.getTime())) return "Just now"; const minutes = Math.round((Date.now() - date.getTime()) / 60000); if (minutes < 1) return "Now"; if (minutes < 60) return `${minutes}m`; const hours = Math.round(minutes / 60); if (hours < 24) return `${hours}h`; return `${Math.round(hours / 24)}d`; }
 
-function RoomsView({ data, isAdmin, onModal }: { data: HotelData; isAdmin: boolean; onModal: (modal: ModalState) => void }) {
+function RoomsView({ data, onModal }: { data: HotelData; onModal: (modal: ModalState) => void }) {
   return (
     <ModuleShell eyebrow="Facilities" title="Rooms" description="Manage all hotel rooms, their types, and current status.">
       <article className="panel table-panel">
@@ -703,16 +733,9 @@ function RoomsView({ data, isAdmin, onModal }: { data: HotelData; isAdmin: boole
                       </span>
                     </td>
                     <td>
-                      <div style={{ display: "flex", gap: "8px" }}>
-                        <button className="row-action" onClick={() => onModal({ type: "room", room })}>
-                          Update status
-                        </button>
-                        {isAdmin && (
-                          <button className="row-action secondary" onClick={() => onModal({ type: "edit_room", room })}>
-                            Edit details
-                          </button>
-                        )}
-                      </div>
+                      <button className="row-action" onClick={() => onModal({ type: "room", room })}>
+                        Update status
+                      </button>
                     </td>
                   </tr>
                 ))}

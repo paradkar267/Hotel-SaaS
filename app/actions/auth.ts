@@ -8,7 +8,7 @@ export async function loginAction(formData: FormData): Promise<void> {
   const password = formData.get("password")?.toString();
 
   if (!email || !password) {
-    redirect("/?error=Email and password are required");
+    redirect("/?error=Email%20and%20password%20are%20required");
   }
 
   const supabase = await createClient();

@@ -2,20 +2,6 @@ import type { BillingType } from "./types";
 
 const ALLOWED_GST_RATES = new Set([0, 500, 1200, 1800]);
 
-export const HOTEL_ACCOMMODATION_SAC = "996311";
-
-/**
- * Real-world Indian Hotel GST Slabs:
- * - Room Tariff up to ₹7,500 per night: 12% GST (1200 bps)
- * - Room Tariff above ₹7,500 per night: 18% GST (1800 bps)
- */
-export function getAutoGstRateBps(nightlyRatePaise: number): number {
-  const rateInr = nightlyRatePaise / 100;
-  if (rateInr <= 0) return 0;
-  if (rateInr <= 7500) return 1200; // 12% GST
-  return 1800; // 18% GST
-}
-
 export function toPaise(value: unknown): number {
   const amount = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(amount) || amount < 0) {

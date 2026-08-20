@@ -1,14 +1,16 @@
-import { AccessError, getIdentity, getSession } from "../../../lib/auth";
+// app/api/live/route.ts
+// Real-time Server-Sent Events (SSE) Audit Broadcaster
+
+import { getSession, AccessError } from "../../../lib/auth";
 import { createClient } from "../../../lib/supabase";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
-    const identity = await getIdentity();
-    if (!identity) throw new AccessError("Sign in to continue.", 401);
     const session = await getSession();
-    if (!session) throw new AccessError("Session expired.", 401);
+    if (!session) throw new AccessError("Sign in to continue.", 401);
+
     const supabase = await createClient();
     let lastId = Number(new URL(request.url).searchParams.get("after") ?? 0);
     const encoder = new TextEncoder();
@@ -27,6 +29,7 @@ export async function GET(request: Request) {
               .order("id", { ascending: false })
               .limit(1)
               .single();
+
             const nextId = Number(data?.id ?? 0);
             if (nextId > lastId) {
               lastId = nextId;
@@ -39,6 +42,7 @@ export async function GET(request: Request) {
             if (timer) clearInterval(timer);
           }
         }, 3000);
+
         lifetime = setTimeout(() => {
           if (timer) clearInterval(timer);
           controller.close();

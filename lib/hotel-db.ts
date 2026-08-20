@@ -1,5 +1,4 @@
 import { createClient } from "./supabase";
-import { sendManagerActionEmail } from "./email-service";
 import type { HotelData, Session } from "./types";
 import { AccessError } from "./auth";
 
@@ -56,28 +55,6 @@ export async function addAudit(
     ip_address: details.ipAddress ?? "",
     created_at: nowIso(),
   });
-
-  if (session.role === "MANAGER") {
-    // Fetch admin email for the tenant
-    const { data: adminUser } = await supabase
-      .from("users")
-      .select("name, email")
-      .eq("tenant_id", session.tenantId)
-      .eq("role", "ADMIN")
-      .limit(1)
-      .single();
-
-    if (adminUser?.email) {
-      await sendManagerActionEmail(adminUser.email, {
-        managerName: session.name || "Manager",
-        managerEmail: session.email,
-        action: details.action,
-        module: details.module,
-        reason: details.reason ?? "System Action",
-        recordId: details.recordId,
-      });
-    }
-  }
 }
 
 export async function getHotelData(session: Session): Promise<HotelData> {
@@ -120,7 +97,7 @@ export async function getHotelData(session: Session): Promise<HotelData> {
       .limit(100),
     supabase
       .from("invoices")
-      .select("*, bookings(*, guests(*), rooms(*)), invoice_items(*), payments(*)")
+      .select("*, bookings(*, guests(*), rooms(*)), payments(amount_paise)")
       .eq("tenant_id", session.tenantId)
       .eq("property_id", session.propertyId)
       .order("issued_at", { ascending: false })
@@ -132,23 +109,28 @@ export async function getHotelData(session: Session): Promise<HotelData> {
       .gte("received_at", today)
   ]);
 
-  const { data: platformTenant } = await supabase
-    .from("tenants")
-    .select("name")
-    .eq("id", "platform")
-    .maybeSingle();
-  const announcement = platformTenant?.name ?? "";
-
   let users: any[] = [];
+  let auditLogs: any[] = [];
   
   if (session.role === "ADMIN") {
-    const { data: usersData } = await supabase
-      .from("users")
-      .select("*")
-      .eq("tenant_id", session.tenantId)
-      .order("role", { ascending: true })
-      .order("name", { ascending: true });
-      
+    const [
+      { data: usersData },
+      { data: auditData }
+    ] = await Promise.all([
+      supabase
+        .from("users")
+        .select("*")
+        .eq("tenant_id", session.tenantId)
+        .order("role", { ascending: true })
+        .order("name", { ascending: true }),
+      supabase
+        .from("audit_logs")
+        .select("*")
+        .eq("tenant_id", session.tenantId)
+        .order("id", { ascending: false })
+        .limit(100)
+    ]);
+    
     users = (usersData || []).map(u => ({
       id: u.id,
       name: u.name,
@@ -158,16 +140,8 @@ export async function getHotelData(session: Session): Promise<HotelData> {
       lastSeenAt: u.last_seen_at,
       createdAt: u.created_at,
     }));
-  }
-
-  const { data: auditData } = await supabase
-    .from("audit_logs")
-    .select("*")
-    .eq("tenant_id", session.tenantId)
-    .order("id", { ascending: false })
-    .limit(session.role === "ADMIN" ? 100 : 20);
     
-  const auditLogs = (auditData || []).map(a => ({
+    auditLogs = (auditData || []).map(a => ({
       id: a.id,
       actorEmail: a.actor_email,
       actorRole: a.actor_role,
@@ -179,6 +153,7 @@ export async function getHotelData(session: Session): Promise<HotelData> {
       newValue: a.new_value,
       createdAt: a.created_at,
     }));
+  }
 
   const mappedRooms = (roomsResult || []).map(r => ({
     id: r.id,
@@ -256,86 +231,11 @@ export async function getHotelData(session: Session): Promise<HotelData> {
     };
   });
 
-  // Auto-consolidate duplicate unpaid invoices for multi-room check-in sessions
-  const rawInvoices = invoicesResult || [];
-  const activeInvoicesMap = new Map<string, any>();
-  const duplicateInvoiceIdsToVoid: string[] = [];
-
-  for (const inv of rawInvoices) {
-    if (inv.status === 'UNPAID') {
-      const booking = inv.bookings || {};
-      const guestId = booking.guest_id || "";
-      const checkInAt = booking.check_in_at || "";
-      const key = `${inv.tenant_id}_${guestId}_${checkInAt}`;
-
-      if (guestId && checkInAt && activeInvoicesMap.has(key)) {
-        const primary = activeInvoicesMap.get(key);
-        primary.total_paise = Number(primary.total_paise) + Number(inv.total_paise);
-        primary.subtotal_paise = Number(primary.subtotal_paise) + Number(inv.subtotal_paise);
-        primary.cgst_paise = Number(primary.cgst_paise) + Number(inv.cgst_paise);
-        primary.sgst_paise = Number(primary.sgst_paise) + Number(inv.sgst_paise);
-        primary.balance_paise = primary.total_paise;
-
-        const mainRoom = primary.bookings?.rooms?.room_number;
-        const dupRoom = inv.bookings?.rooms?.room_number;
-        if (!primary.extraRoomNumbers) primary.extraRoomNumbers = [];
-        if (mainRoom && !primary.extraRoomNumbers.includes(mainRoom)) primary.extraRoomNumbers.push(mainRoom);
-        if (dupRoom && !primary.extraRoomNumbers.includes(dupRoom)) primary.extraRoomNumbers.push(dupRoom);
-
-        duplicateInvoiceIdsToVoid.push(inv.id);
-      } else {
-        activeInvoicesMap.set(key, inv);
-      }
-    }
-  }
-
-  // Cleanup void duplicate invoices in DB asynchronously
-  if (duplicateInvoiceIdsToVoid.length > 0) {
-    Promise.all(duplicateInvoiceIdsToVoid.map(dupId =>
-      supabase.from("invoices").update({ status: 'VOID', notes: 'Consolidated into primary multi-room invoice' }).eq("id", dupId)
-    )).catch(err => console.error("Error voiding duplicate invoices:", err));
-  }
-
-  const filteredInvoices = rawInvoices.filter(i => !duplicateInvoiceIdsToVoid.includes(i.id));
-
-  const mappedInvoices = filteredInvoices.map(i => {
+  const mappedInvoices = (invoicesResult || []).map(i => {
     const booking = i.bookings || {};
     const guest = booking.guests || {};
     const room = booking.rooms || {};
-    const payments = (i.payments || []).map((p: any) => ({
-      id: p.id,
-      amountPaise: p.amount_paise,
-      method: p.method,
-      reference: p.reference,
-      receivedAt: p.received_at,
-    }));
-    const paidPaise = payments.reduce((sum: number, p: any) => sum + (p.amountPaise || 0), 0);
-
-    // Extract actual numeric or alphanumeric room numbers (ignoring generic words like 'accommodation')
-    const items = i.invoice_items || [];
-    const itemRoomNumbers = items
-      .map((item: any) => {
-        const desc = String(item.description || "");
-        const match = desc.match(/Room\s+accommodation\s+\(Room\s+([A-Za-z0-9-]+)\)/i) ||
-                      desc.match(/\(Room\s+([A-Za-z0-9-]+)\)/i) ||
-                      desc.match(/Room\s+([0-9]+[A-Za-z0-9-]*)/i);
-        if (match && match[1] && match[1].toLowerCase() !== "accommodation") {
-          return match[1];
-        }
-        return null;
-      })
-      .filter(Boolean);
-
-    const mainRoomNumber = room.room_number ? String(room.room_number) : null;
-    const extraRooms = (i.extraRoomNumbers || []).map(String);
-    const validMainRoom = (mainRoomNumber && mainRoomNumber.toLowerCase() !== "accommodation") ? [mainRoomNumber] : [];
-
-    const allRoomNumbers = Array.from(new Set([...itemRoomNumbers, ...extraRooms, ...validMainRoom]))
-      .filter(r => r && r.toLowerCase() !== "accommodation" && r.toLowerCase() !== "null" && r.toLowerCase() !== "undefined");
-
-    const roomDisplay = allRoomNumbers.length > 1
-      ? `${allRoomNumbers.join(", ")} (${allRoomNumbers.length} Rooms)`
-      : (allRoomNumbers[0] ? `${allRoomNumbers[0]}` : (mainRoomNumber ? `${mainRoomNumber}` : "—"));
+    const paidPaise = (i.payments || []).reduce((sum: number, p: any) => sum + (p.amount_paise || 0), 0);
 
     return {
       id: i.id,
@@ -351,10 +251,8 @@ export async function getHotelData(session: Session): Promise<HotelData> {
       totalPaise: i.total_paise,
       balancePaise: i.balance_paise,
       issuedAt: i.issued_at,
-      guestName: guest.full_name || "Guest",
-      guestEmail: guest.email || "",
-      roomNumber: roomDisplay,
-      payments,
+      guestName: guest.full_name,
+      roomNumber: room.room_number,
       paidPaise
     };
   });
@@ -375,27 +273,9 @@ export async function getHotelData(session: Session): Promise<HotelData> {
       city: property?.city,
       state: property?.state,
       postalCode: property?.postal_code,
-      postal_code: property?.postal_code,
       gstin: property?.gstin,
-      currency: property?.currency || "INR",
-      defaultGstBps: property?.default_gst_bps ?? 1200,
-      default_gst_bps: property?.default_gst_bps ?? 1200,
-      contactPhone: property?.contact_phone || "",
-      contact_phone: property?.contact_phone || "",
-      contactEmail: property?.contact_email || "",
-      contact_email: property?.contact_email || "",
-      upiId: property?.upi_id || "hotelos@upi",
-      upi_id: property?.upi_id || "hotelos@upi",
-      upiName: property?.upi_name || property?.name || "HotelOS",
-      upi_name: property?.upi_name || property?.name || "HotelOS",
-      checkInTime: property?.check_in_time || "14:00",
-      check_in_time: property?.check_in_time || "14:00",
-      checkOutTime: property?.check_out_time || "11:00",
-      check_out_time: property?.check_out_time || "11:00",
-      logoUrl: property?.logo_url || "",
-      logo_url: property?.logo_url || "",
-      googleReviewLink: property?.google_review_link || "",
-      google_review_link: property?.google_review_link || "",
+      currency: property?.currency,
+      defaultGstBps: property?.default_gst_bps,
     } as any,
     metrics: {
       totalRooms: mappedRooms.length,
@@ -414,6 +294,5 @@ export async function getHotelData(session: Session): Promise<HotelData> {
     users,
     auditLogs,
     latestAuditId: auditLogs.length > 0 ? auditLogs[0].id : 0,
-    announcement,
   };
 }

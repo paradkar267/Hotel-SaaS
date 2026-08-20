@@ -47,5 +47,4 @@ export type HotelData = {
   users: Array<Record<string, unknown>>;
   auditLogs: Array<Record<string, unknown>>;
   latestAuditId: number;
-  announcement?: string;
 };
