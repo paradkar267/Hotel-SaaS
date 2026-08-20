@@ -95,11 +95,11 @@ function CheckInForm({ data, onClose, onSwitch, onSuccess }: FormProps & { data:
         fullName: form.get("fullName"),
         phone: form.get("phone"),
         email: form.get("email"),
-        address: form.get("address"),
+        address: "",
         city: form.get("city"),
-        state: form.get("state"),
-        postalCode: form.get("postalCode"),
-        country: form.get("country"),
+        state: "",
+        postalCode: "",
+        country: form.get("country") || "India",
         nationality: form.get("nationality"),
         idType: form.get("idType"),
         idLast4: form.get("idLast4"),
@@ -110,7 +110,7 @@ function CheckInForm({ data, onClose, onSwitch, onSuccess }: FormProps & { data:
         billingType,
         companyName: billingType === "GST" ? form.get("companyName") : "",
         guestGstin: billingType === "GST" ? form.get("guestGstin") : "",
-        guestState: billingType === "GST" ? form.get("guestState") : form.get("state"),
+        guestState: billingType === "GST" ? form.get("guestState") : "",
         notes: form.get("notes"),
       });
       let message = String(result.message ?? "Guest checked in.");
@@ -145,16 +145,13 @@ function CheckInForm({ data, onClose, onSwitch, onSuccess }: FormProps & { data:
     <Modal title="New guest check-in" subtitle="Front desk · confirmed records lock automatically" icon={<ClipboardCheck size={21} />} onClose={onClose} wide>
       {availableRooms.length === 0 ? <ModalAlert tone="warning" icon={<AlertTriangle size={17} />} text="No clean rooms are available. An admin must release a room first." /> : null}
       <form onSubmit={submit} className="action-form">
-        <FormSection title="Guest details" description="Only collect information needed for this stay.">
+        <FormSection title="Guest details" description="Quick front-desk registration.">
           <div className="form-grid two">
             <Field label="Full name" name="fullName" placeholder="e.g. Priya Sharma" required />
             <Field label="Mobile number" name="phone" placeholder="+91 98••• •••••" inputMode="tel" required />
             <Field label="Email" name="email" placeholder="guest@example.com" type="email" />
+            <Field label="City" name="city" placeholder="e.g. Pune" />
             <Field label="Nationality" name="nationality" defaultValue="Indian" required />
-            <Field label="Address" name="address" placeholder="Street address" />
-            <Field label="City" name="city" placeholder="Pune" />
-            <Field label="State" name="state" placeholder="Maharashtra" required />
-            <Field label="Postal code" name="postalCode" placeholder="411001" inputMode="numeric" />
             <input type="hidden" name="country" value="India" />
           </div>
         </FormSection>
@@ -218,8 +215,50 @@ function ToggleManagerForm({ user, onClose, onSuccess }: FormProps & { user: Row
 
 function GuestForm({ guest, onClose, onSuccess }: FormProps & { guest: Row }) {
   const [busy, setBusy] = useState(false); const [error, setError] = useState("");
-  async function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setBusy(true); setError(""); try { const form = new FormData(event.currentTarget); const result = await submitJson({ action: "update_guest", guestId: guest.id, fullName: form.get("fullName"), phone: form.get("phone"), email: form.get("email"), address: form.get("address"), city: form.get("city"), state: form.get("state"), postalCode: form.get("postalCode"), country: form.get("country"), nationality: form.get("nationality"), notes: form.get("notes"), reason: form.get("reason") }); await onSuccess(String(result.message)); onClose(); } catch (caught) { setError(errorMessage(caught)); } finally { setBusy(false); } }
-  return <Modal title="Edit guest profile" subtitle="Admin override · all differences are audited" icon={<ShieldCheck size={21} />} onClose={onClose} wide><form onSubmit={submit} className="action-form"><FormSection title="Contact & identity" description={`ID proof: ${String(guest.idType || "Not recorded")} · •••• ${String(guest.idLast4 || "—")}`}><div className="form-grid two"><Field label="Full name" name="fullName" defaultValue={String(guest.fullName)} required /><Field label="Mobile number" name="phone" defaultValue={String(guest.phone)} required /><Field label="Email" name="email" type="email" defaultValue={String(guest.email)} /><Field label="Nationality" name="nationality" defaultValue={String(guest.nationality)} /><Field label="Address" name="address" defaultValue={String(guest.address)} /><Field label="City" name="city" defaultValue={String(guest.city)} /><Field label="State" name="state" defaultValue={String(guest.state)} /><Field label="Postal code" name="postalCode" defaultValue={String(guest.postalCode)} /><Field label="Country" name="country" defaultValue={String(guest.country)} /></div><TextArea label="Guest notes" name="notes" defaultValue={String(guest.notes)} /></FormSection><TextArea label="Reason for editing this record" name="reason" placeholder="Required for the audit trail" required /><FormError message={error} /><ModalFooter onClose={onClose} busy={busy} submitLabel="Save audited changes" /></form></Modal>;
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      const form = new FormData(event.currentTarget);
+      const result = await submitJson({
+        action: "update_guest",
+        guestId: guest.id,
+        fullName: form.get("fullName"),
+        phone: form.get("phone"),
+        email: form.get("email"),
+        city: form.get("city"),
+        nationality: form.get("nationality"),
+        notes: form.get("notes"),
+        reason: form.get("reason")
+      });
+      await onSuccess(String(result.message));
+      onClose();
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Modal title="Edit guest profile" subtitle="Admin override · all differences are audited" icon={<ShieldCheck size={21} />} onClose={onClose} wide>
+      <form onSubmit={submit} className="action-form">
+        <FormSection title="Contact & identity" description={`ID proof: ${String(guest.idType || "Not recorded")} · •••• ${String(guest.idLast4 || "—")}`}>
+          <div className="form-grid two">
+            <Field label="Full name" name="fullName" defaultValue={String(guest.fullName)} required />
+            <Field label="Mobile number" name="phone" defaultValue={String(guest.phone)} required />
+            <Field label="Email" name="email" type="email" defaultValue={String(guest.email)} />
+            <Field label="City" name="city" defaultValue={String(guest.city)} />
+            <Field label="Nationality" name="nationality" defaultValue={String(guest.nationality)} />
+          </div>
+          <TextArea label="Guest notes" name="notes" defaultValue={String(guest.notes)} />
+        </FormSection>
+        <TextArea label="Reason for editing this record" name="reason" placeholder="Required for the audit trail" required />
+        <FormError message={error} />
+        <ModalFooter onClose={onClose} busy={busy} submitLabel="Save audited changes" />
+      </form>
+    </Modal>
+  );
 }
 
 function StayForm({ booking, data, onClose, onSwitch, onSuccess }: FormProps & { booking: Row; data: HotelData; onSwitch: (modal: ModalState) => void }) {
